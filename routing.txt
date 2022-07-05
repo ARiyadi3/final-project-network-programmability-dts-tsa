@@ -20,7 +20,7 @@ login local
 exit
 ip ssh ver 2
 
-== Konfigurasi IP
+Konfigurasi IP
 interface G0/0/0
 desc connected to SW1
 ip address 10.10.10.113 255.255.255.252
@@ -38,7 +38,7 @@ desc connected to R3
 ip address 10.10.10.125 255.255.255.252
 no sh
 
-== Routing OSPF
+Routing OSPF
 router ospf 1
 router-id 1.1.1.1
 network 10.10.10.112 0.0.0.3 area 0
@@ -48,8 +48,8 @@ network 10.10.10.124 0.0.0.3 area 0
 
 do copy run start
 
-====== Router 2 ======
-== Basic Configuration
+Router 2 
+Basic Configuration
 enable
 configure terminal
 hostname R2
@@ -71,7 +71,7 @@ login local
 exit
 ip ssh ver 2
 
-== Konfigurasi IP
+Konfigurasi IP
 interface S0/1/0
 desc connected to R1
 ip address 10.10.10.122 255.255.255.252
@@ -81,7 +81,7 @@ desc connected to SW3
 ip address 10.10.10.129 255.255.255.252
 no sh
 
-== Routing OSPF
+Routing OSPF
 router ospf 1
 router-id 2.2.2.2
 network 10.10.10.120 0.0.0.3 area 0
@@ -89,8 +89,8 @@ network 10.10.10.128 0.0.0.3 area 0
 
 do copy run start
 
-====== Router 3 ======
-== Basic Configuration
+Router 3 
+Basic Configuration
 enable
 configure terminal
 hostname R3
@@ -112,7 +112,7 @@ login local
 exit
 ip ssh ver 2
 
-== Konfigurasi IP
+Konfigurasi IP
 interface S0/1/1
 desc connected to R1
 ip address 10.10.10.126 255.255.255.252
@@ -122,11 +122,10 @@ desc connected to SW4
 ip address 10.10.10.133 255.255.255.252
 no sh
 
-== Routing OSPF
+Routing OSPF
 router ospf 1
 router-id 3.3.3.3
 network 10.10.10.124 0.0.0.3 area 0
 network 10.10.10.132 0.0.0.3 area 0
 
 do copy run start
-Footer
