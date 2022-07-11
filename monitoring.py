@@ -1,180 +1,99 @@
-Basic Configuration
-enable
-configure terminal
-hostname SW1
-service password-encryption
-enable secret encisco
-no ip domain-lookup
-ip domain-name digitalent.com
-banner motd #AUTHORIZED ACCESS ONLY#
-crypto key generate rsa general-keys modulus 1024
-username admin secret sshcisco
-ip ssh ver 2
-line console 0
-password linecisco
-login
-exec-time 4
-line vty 0 15
-transport input ssh
-exec-time 4
-login local
-exit
-ip routing
-ip default-gateway 10.10.10.113
+# Import library yang dibutuhkan
+import json
+import requests
+from time import *
 
-VLAN
-vlan 10
-name Mahasiswa
-vlan 20
-name Dosen
-vlan 60
-name Management
-vlan 99
-name native
+# Menambahkan base_url, serta autentikasi user dan password untuk masuk ke website sdn
+base_url = "http://localhost:58000/api/v1"
+user = "cisco"
+password = "sdncisco"
 
-Konfigurasi IP vlan 
-interface vlan 10
-desc vlan mahasiswa
-ip address 10.10.10.1 255.255.255.192
-no sh
-interface vlan 20
-desc vlan dosen
-ip address 10.10.10.65 255.255.255.240
-no sh
-interface vlan 60
-desc vlan Management
-ip address 10.10.10.81 255.255.255.240
-no sh
-interface vlan 99
-desc native
-ip address 10.10.10.97 255.255.255.240
-no sh
+# Fungsi untuk mendapatkan ticket rest API
+def get_ticket():
+    # Menentukan header dan data yang dibutuhkan untuk login
+    headers = {"content-type": "application/json"}
+    data = {"username": user, "password": password}
+    # Membuat wadah untuk melakukan requests post untuk meminta ticket dalam bentuk json
+    response = requests.post(base_url+"/ticket", headers=headers, json=data)
+    ticket = response.json()
+    # Parsing data untuk mendapatkan ticket
+    service_ticket = ticket["response"]["serviceTicket"]
+    return service_ticket
 
-konfigurasi interface dan switchport
-interface g1/0/1 
-desc Tersambung ke R1
-no switchport
-ip address 10.10.10.114 255.255.255.252
-no sh
-interface g1/0/2
-desc tersambung ke SW2
-switchport mode trunk
-switchport non
-switchport trunk native vlan 99
-switchport trunk allowed vlan 10,20,60,99
+# Fungsi untuk menghitung managed device yang terdeteksi/terkoneksi
+def get_network_device_count():
+    ticket = get_ticket()
+    headers = {"X-Auth-Token": ticket}
+    response = requests.get(base_url+"/network-device/count", headers=headers)
+    managed_device_count = response.json()
+    print("Total Managed Device :", managed_device_count["response"])
 
-interface range gigabitEthernet 1/0/3-10,  g1/0/14-24, g1/1/1-4
-switchport mode access
-switchport non
-desc tidak digunakan
-sh
+# Fungsi untuk mendapatkan list managed network device yang terkoneksi dengan SDN
+def get_network_device():
+    ticket = get_ticket()
+    headers = {"X-Auth-Token": ticket}
+    response = requests.get(base_url+"/network-device", headers=headers)
+    print("===Mendapatkan Daftar Managed Device===")
+    print("Status Code : ",response.status_code)
+    managed_device = response.json()
+    networkDevices = managed_device["response"]
 
-interface range g1/0/11-12
-switchport mode access
-switchport non
-switchport access vlan 10
-interface g1/0/13
-switchport mode access
-switchport non
-switchport access vlan 20
+    for networkDevice in networkDevices:
+        print(networkDevice["hostname"], "\t\t", networkDevice["platformId"], "\t", networkDevice["managementIpAddress"])
 
-Routing OSPF
-router ospf 1
-network 10.10.10.112 0.0.0.3 area 0
-network 10.10.10.0 0.0.0.63 area 0
-network 10.10.10.64 0.0.0.15 area 0
-network 10.10.10.80 0.0.0.15 area 0
-network 10.10.10.96 0.0.0.15 area 0
+# Fungsi untuk mendapatkan list host yang tersambung dengan jaringan
+def get_connected_hosts():
+    ticket = get_ticket()
+    headers = {"X-Auth-Token": ticket}
+    response = requests.get(base_url+"/host", headers=headers, verify=False)
+    print("===Mendapatkan Daftar Host===")
+    print("Status Code : ",response.status_code)
+    connectedDevices = response.json()
+    devices = connectedDevices["response"]
+    print("Device Name \t IP Address \t MAC Address \t Connected Port")
+    for device in devices:
+        print(device["hostName"], "\t", device["hostIp"], "\t", device["hostMac"], "\t\t", device["connectedInterfaceName"])
 
-do copy run start
+# Membuat fungsi untuk monitoring kesehatan jaringan
+def get_network_health():
+    ticket = get_ticket()
+    headers = {"X-Auth-Token": ticket}
+    response = requests.get(base_url+"/assurance/health", headers=headers)
+    health = response.json()
+    network_health = health['response'][0]['networkDevices']['totalPercentage']
+    return network_health
 
-SW2 
-Basic Configuration
-enable
-configure terminal
-hostname SW2
-service password-encryption
-enable secret encisco
-no ip domain-lookup
-ip domain-name digitalent.com
-banner motd #AUTHORIZED ACCESS ONLY#
-crypto key generate rsa general-keys modulus 1024
-username admin secret sshcisco
-ip ssh ver 2
-line console 0
-password linecisco
-login
-exec-time 4
-line vty 0 15
-transport input ssh
-exec-time 4
-login local
-exit
-ip routing
-ip default-gateway 10.10.10.117
+# Membuat fungsi untuk mendapatkan informasi masalah yang terdapat pada jaringan yang dimontiroing
+def get_network_issues():
+    ticket = get_ticket()
+    headers = {'Accept': 'application/yang-data+json', 'X-Auth-Token': ticket}
+    issues = requests.get(url = base_url + "/assurance/health-issues", headers=headers)
+    issue_details = issues.json()
+    devices = len(issue_details['response'])
+    output = "Peringatan! Terjadi gangguan akses ke "+ str(devices) +" perangkat berikut:\n"
+    output += "-"*60 +"\n"
+    output += "NO. | PERANGKAT | WAKTU | DESKRIPSI\n"
+    output +="-"*60 +"\n"
+    number=1
+    for device in issue_details['response']:
+        output += ""+ str(number) +". | "+ device['issueSource'] +" | "+ device['issueTimestamp'] +" | "+ device['issueDescription'] +"\n"
+        number +=1
+    return output
 
-VLAN
-vlan 10
-name Mahasiswa
-vlan 20
-name Dosen
-vlan 60
-name Management
-vlan 99
-name native
-
-Konfigurasi IP vlan 
-interface vlan 10
-desc vlan mahasiswa
-ip address 10.10.10.2 255.255.255.192
-no sh
-interface vlan 20
-desc vlan dosen
-ip address 10.10.10.66 255.255.255.240
-no sh
-interface vlan 60
-desc vlan Management
-ip address 10.10.10.82 255.255.255.240
-no sh
-interface vlan 99
-desc native
-ip address 10.10.10.98 255.255.255.240
-no sh
-
-konfigurasi interface dan switchport
-interface g1/0/1 
-desc Tersambung ke R1
-no switchport
-ip address 10.10.10.118 255.255.255.252
-no sh
-interface g1/0/2
-desc tersambung ke SW1
-switchport mode trunk
-switchport non
-switchport trunk native vlan 99
-switchport trunk allowed vlan 10,20,60,99
-
-interface range gigabitEthernet 1/0/3-10,  g1/0/14-24, g1/1/1-4
-desc tidak digunakan
-switchport mode access
-switchport non
-sh
-
-interface range g1/0/11-12
-switchport mode access
-switchport non
-switchport access vlan 10
-interface g1/0/13
-switchport mode access
-switchport non
-switchport access vlan 20
-
-Routing OSPF
-router ospf 1
-network 10.10.10.116 0.0.0.3 area 0
-network 10.10.10.0 0.0.0.63 area 0
-network 10.10.10.64 0.0.0.15 area 0
-network 10.10.10.80 0.0.0.15 area 0
-network 10.10.10.96 0.0.0.15 area 0
-
-do copy run start
+if __name__ == "__main__":
+    print("===================================================================================")
+    print("==============MONITORING JARINGAN MENGGUNAKAN SDN CONTROLLER REST API==============")
+    print("===================FINAL PROJECT DTS-TSA NETWORK PROGRAMMABILITY===================")
+    print("========================Agung Riyadi/2018102004=======================")
+    print("===================================================================================")
+    print("Kode REST API : " + get_ticket())
+    get_network_device_count()
+    get_network_device()
+    get_connected_hosts()
+    network_health = get_network_health()
+    if int(network_health) < 100:
+        issues = get_network_issues()
+        print(issues)
+    else:
+        print("Persentase Network Health: "+ network_health +"%")
+    
